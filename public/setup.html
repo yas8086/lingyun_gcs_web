@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MQTT 连接配置 · 灵云01号 Web 地面站</title>
+  <style>
+    :root {
+      --bg: #eef2f7; --card: #fff; --card2: #f8fafc; --text: #1e293b;
+      --text2: #64748b; --line: #e2e8f0; --primary: #2563eb;
+      --ok: #16a34a; --err: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+      padding: 20px;
+    }
+    .card {
+      width: 520px; max-width: 100%; background: var(--card); border: 1px solid var(--line);
+      border-radius: 16px; padding: 24px; box-shadow: 0 8px 24px rgba(15,23,42,.08);
+    }
+    h1 { margin: 0 0 6px; font-size: 20px; }
+    .sub { color: var(--text2); font-size: 12px; line-height: 1.6; margin-bottom: 18px; }
+    .warn {
+      background: #fffbeb; border: 1px solid #f59e0b; color: #b45309;
+      border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.6; margin-bottom: 16px;
+    }
+    label { display: block; font-size: 12px; color: var(--text2); margin: 12px 0 6px; }
+    input[type="text"], input[type="password"], input[type="number"] {
+      width: 100%; height: 38px; border: 1px solid var(--line); border-radius: 8px;
+      padding: 0 10px; font-size: 13px; font-family: ui-monospace, Menlo, Consolas, monospace;
+      background: var(--card2); color: var(--text); outline: none;
+    }
+    input:focus { border-color: var(--primary); }
+    .row { display: flex; gap: 10px; }
+    .row > div { flex: 1 1 0; }
+    .check { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; color: var(--text); }
+    .check input { width: 16px; height: 16px; accent-color: var(--primary); }
+    button {
+      width: 100%; height: 42px; margin-top: 20px; border: 0; border-radius: 10px;
+      background: var(--primary); color: #fff; font-size: 14px; font-weight: 700; cursor: pointer;
+    }
+    button:disabled { opacity: .6; cursor: wait; }
+    .msg { margin-top: 14px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+    .msg.ok { color: var(--ok); }
+    .msg.err { color: var(--err); }
+    a { color: var(--primary); }
+    .foot { margin-top: 18px; font-size: 12px; color: var(--text2); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>MQTT 连接配置</h1>
+    <div class="sub">
+      配置仅保存在后端进程内存中，不写入文件、不写入浏览器、不通过任何接口回显。
+      服务重启或重新部署后需要重新填写。
+    </div>
+    <div class="warn">
+      请使用只读账号（仅允许订阅遥测主题、禁止发布）。本页只在私有站点内可访问。
+    </div>
+    <form id="cfgForm">
+      <label>Broker 主机名</label>
+      <input type="text" id="host" placeholder="例如 xxxx.ala.cn-shenzhen.emqxsl.cn" autocomplete="off" required>
+      <div class="row">
+        <div>
+          <label>端口</label>
+          <input type="number" id="port" value="8883" min="1" max="65535" required>
+        </div>
+        <div>
+          <label>Topic</label>
+          <input type="text" id="topic" value="bt600/telemetry" autocomplete="off" required>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="tls" checked> 使用 TLS（mqtts）</label>
+      <label>用户名</label>
+      <input type="text" id="username" autocomplete="off" required>
+      <label>密码</label>
+      <input type="password" id="password" autocomplete="new-password" required>
+      <button type="submit" id="submitBtn">连接</button>
+    </form>
+    <div class="msg" id="msg"></div>
+    <div class="foot"><a href="/">返回地面站</a></div>
+  </div>
+  <script>
+    const form = document.getElementById('cfgForm');
+    const msg = document.getElementById('msg');
+    const btn = document.getElementById('submitBtn');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.className = 'msg';
+      msg.textContent = '正在提交…';
+      btn.disabled = true;
+      try {
+        const resp = await fetch('/api/mqtt/configure', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            host: document.getElementById('host').value.trim(),
+            port: Number(document.getElementById('port').value),
+            tls: document.getElementById('tls').checked,
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value,
+            topic: document.getElementById('topic').value.trim()
+          })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (resp.ok && data.ok) {
+          msg.className = 'msg ok';
+          msg.textContent = '配置已提交，后端正在连接 MQTT。请返回地面站查看连接详情；若失败，请核对账号与 ACL。';
+          document.getElementById('password').value = '';
+        } else {
+          msg.className = 'msg err';
+          msg.textContent = '配置失败：' + (data.message || ('HTTP ' + resp.status));
+        }
+      } catch (err) {
+        msg.className = 'msg err';
+        msg.textContent = '配置失败：' + err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

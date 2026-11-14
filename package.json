@@ -1,0 +1,13 @@
+{
+  "name": "lingyun-gcs-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "灵云01号 BT600 飞艇地面站 Web 版：服务端 MQTT 代理 + 同源 SSE 遥测 + 复刻桌面端 UI",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
