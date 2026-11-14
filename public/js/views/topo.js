@@ -560,7 +560,7 @@
     for (const n of App.tempNodes()) {
       if (!probeHistory[n.id]) probeHistory[n.id] = { max: -Infinity, min: Infinity, sum: 0, count: 0 };
       const h = probeHistory[n.id];
-      if (typeof n.temp === 'number' && n.online !== 0 && n.temp > -100) {
+      if (App.nodeOnline(n) && typeof n.temp === 'number' && n.temp > -100) {
         h.max = Math.max(h.max, n.temp);
         h.min = Math.min(h.min, n.temp);
         h.sum += n.temp;
@@ -666,13 +666,13 @@
       const linkUp = !(App.state.status && App.state.status.linkOnline === false);
       panel.querySelector('#probeCount').textContent = '探头 ' + nodes.length;
       const rows = nodes.map((n) => {
-        const off = !linkUp || n.online === 0 || n.online === false;
+        const off = !linkUp || !App.nodeOnline(n);
         const h = probeHistory[n.id] || { max: NaN, min: NaN, sum: 0, count: 0 };
         const avg = h.count ? h.sum / h.count : NaN;
         return '<tr>'
           + '<td>#' + App.esc(n.id) + '</td>'
           + '<td>' + App.esc(probePosition(n.id)) + '</td>'
-          + '<td style="color:' + (off ? 'var(--err)' : 'var(--ok)') + '">' + (off ? '离线' : (n.stale === true ? '陈旧' : '在线')) + '</td>'
+          + '<td style="color:' + (off ? 'var(--err)' : 'var(--ok)') + '">' + (off ? '离线' : (App.nodeStale(n) ? '陈旧' : '在线')) + '</td>'
           + '<td>' + (off ? '—' : App.toTemp(n.temp) + ' ' + App.tempUnit()) + '</td>'
           + '<td>' + (off || !Number.isFinite(h.max) ? '—' : App.toTemp(h.max) + ' ' + App.tempUnit()) + '</td>'
           + '<td>' + (off || !Number.isFinite(h.min) ? '—' : App.toTemp(h.min) + ' ' + App.tempUnit()) + '</td>'

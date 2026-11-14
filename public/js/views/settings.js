@@ -164,8 +164,10 @@
           if (cfg.theme) Object.assign(App.state.theme, cfg.theme);
           if (cfg.units) Object.assign(App.state.units, cfg.units);
           if (Array.isArray(cfg.hiddenModules)) App.state.hiddenModules = cfg.hiddenModules;
+          if (Array.isArray(cfg.statusWidgets)) App.state.statusWidgets = cfg.statusWidgets;
           App.saveSettings();
           App.themeChanged();
+          App.applyStatusWidgets();
           App.toast('配置已导入');
           App.navigate(4);
         } catch (err) {

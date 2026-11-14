@@ -540,12 +540,12 @@
     return Array.isArray(d.nodes) ? d.nodes : [];
   };
 
-  function offlineOf(n) { return n && (n.online === 0 || n.online === false); }
+  function offlineOf(n) { return !App.nodeOnline(n); }
   function linkDown() { return App.state.status && App.state.status.linkOnline === false; }
 
   App.tempNodeCard = function (n) {
     const off = linkDown() || offlineOf(n);
-    const stale = !off && n.stale === true;
+    const stale = !off && App.nodeStale(n);
     const alarm = !off && Number(n.alarm) !== 0;
     const cls = ['node-card'];
     if (off) cls.push('offline');
@@ -563,7 +563,7 @@
 
   App.pressureNodeCard = function (n) {
     const off = linkDown() || offlineOf(n);
-    const stale = !off && n.stale === true;
+    const stale = !off && App.nodeStale(n);
     const alarm = !off && Number(n.alarm) !== 0;
     const cls = ['node-card'];
     if (off) cls.push('offline');

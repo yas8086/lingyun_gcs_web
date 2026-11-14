@@ -4,3 +4,5 @@ npm-debug.log*
 .env
 .env.*
 .DS_Store
+dist/
+.trae-html-share-packages/

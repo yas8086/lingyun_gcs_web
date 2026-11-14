@@ -132,6 +132,10 @@
 
   App.tel = function () { return App.state.telemetry || {}; };
   App.dev = function (key) { return (App.state.telemetry || {})[key] || {}; };
+  // 协议约定：节点 online 为 1/true 才算在线；离线节点只有 { id, online: 0 }
+  App.nodeOnline = function (n) { return !!n && (n.online === 1 || n.online === true); };
+  // 协议约定：stale 为 1/true 表示数值是去抖窗口内沿用的旧值
+  App.nodeStale = function (n) { return !!n && (n.stale === 1 || n.stale === true); };
   App.val = function (dev, key) {
     const d = App.dev(dev);
     const v = d[key];
@@ -145,7 +149,7 @@
     if (key === 'temp' || key === 'pressure') {
       const d = App.dev(key);
       const nodes = Array.isArray(d.nodes) ? d.nodes : [];
-      return nodes.some((n) => n && n.online !== 0 && n.online !== false);
+      return nodes.some(App.nodeOnline);
     }
     const d = App.dev(key);
     if (!d || Object.keys(d).length === 0) return false;

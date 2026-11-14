@@ -15,6 +15,7 @@
   function devBadge(key) { return App.online(key) ? '正常' : '离线'; }
 
   function tileValue(dev, fid, unit, dp) {
+    if (!App.online(dev)) return '--';
     if (fid === 'fault_m' || fid === 'fault_d') return App.fmtInt(App.val(dev, 'fault'));
     if (dev === 'dcdc' && fid === 'enabled') return App.val('dcdc', 'enabled') === 1 || App.dev('dcdc').enabled === true ? '开启' : '关闭';
     if (dev === 'backup' && (fid === 'fault' || fid === 'soh')) return App.fmtInt(App.val('backup', fid));
@@ -37,14 +38,14 @@
     let any = false;
     for (const id of bags) {
       const n = nodes.find((x) => Number(x.id) === id);
-      const off = !n || n.online === 0 || n.online === false;
+      const off = !n || !App.nodeOnline(n);
       if (off) {
         parts.push('<span class="dim">' + App.bagNameOf(id) + ' 离线</span>');
         continue;
       }
       any = true;
       const txt = App.pressureText(n.pressure);
-      if (n.stale === true) parts.push('<span class="dim">' + App.bagNameOf(id) + ' ' + App.esc(txt) + '~</span>');
+      if (App.nodeStale(n)) parts.push('<span class="dim">' + App.bagNameOf(id) + ' ' + App.esc(txt) + '~</span>');
       else parts.push(App.bagNameOf(id) + ' ' + App.esc(txt));
     }
     if (!any) return '<span class="dim">全部离线</span>';
@@ -53,7 +54,7 @@
 
   function stripHTML() {
     return `
-    <div class="strip" id="strip">
+    <div class="strip" id="strip" ${App.isModuleHidden('strip') ? 'style="display:none"' : ''}>
       <div class="strip-art"><img src="img/airship-blue.svg" alt="飞艇"></div>
       <div class="strip-info">
         <div class="strip-name">BT600 · 载重飞艇</div>
@@ -120,9 +121,16 @@
   }
 
   function bottomHTML() {
+    const hideDcdc = App.isModuleHidden('dcdc');
+    const hidePressure = App.isModuleHidden('pressure');
+    const hideTemp = App.isModuleHidden('temp');
+    const cols = [];
+    if (!hideDcdc) cols.push('minmax(0, 1fr)');
+    if (!hidePressure) cols.push('minmax(0, 1fr)');
+    if (!hideTemp) cols.push('minmax(0, 2fr)');
     return `
-    <div class="bottom-grid" id="bottomGrid">
-      <div class="card collect-card" id="cardDcdc">
+    <div class="bottom-grid" id="bottomGrid" ${cols.length ? 'style="grid-template-columns:' + cols.join(' ') + '"' : 'style="display:none"'}>
+      <div class="card collect-card" id="cardDcdc" ${hideDcdc ? 'style="display:none"' : ''}>
         <div class="card-head"><div class="card-title">DCDC 电源模块</div><div class="grow"></div>
           <span class="badge" data-badge="dcdc">离线</span></div>
         <div class="hero-row">
@@ -132,14 +140,14 @@
         <div class="kv-grid">${TILE_SPECS.dcdc.map((s) => tileHTML('dcdc', s)).join('')}</div>
         <div class="grow"></div>
       </div>
-      <div class="card collect-card" id="cardPressure">
+      <div class="card collect-card" id="cardPressure" ${hidePressure ? 'style="display:none"' : ''}>
         <div class="card-head"><div class="card-title">气压采集</div>
           <span class="card-sub" id="presCount">在线 0 / 0</span><div class="grow"></div>
           <span class="badge" data-badge="pressure">离线</span></div>
         <div class="collect-flow" id="pressureFlow"></div>
         <div class="grow"></div>
       </div>
-      <div class="card collect-card" id="cardTemp">
+      <div class="card collect-card" id="cardTemp" ${hideTemp ? 'style="display:none"' : ''}>
         <div class="card-head"><div class="card-title">温度采集</div>
           <span class="card-sub" id="tempCount">在线 0 / 0</span><div class="grow"></div>
           <span class="badge" data-badge="temp">离线</span></div>
@@ -151,7 +159,7 @@
 
   function logHTML() {
     return `
-    <div class="card log-card" id="logCard">
+    <div class="card log-card" id="logCard" ${App.isModuleHidden('log') ? 'style="display:none"' : ''}>
       <div class="log-head">
         <div class="card-title">运行日志</div>
         <div class="grow"></div>
@@ -209,7 +217,7 @@
         if (key === 'pressure' || key === 'temp') {
           const nodes = key === 'pressure' ? App.pressureNodes() : App.tempNodes();
           const linkUp = !(App.state.status && App.state.status.linkOnline === false);
-          const on = linkUp && nodes.some((n) => n && n.online !== 0 && n.online !== false);
+          const on = linkUp && nodes.some(App.nodeOnline);
           b.textContent = nodes.length ? (on ? '正常' : '离线') : '离线';
           b.className = 'badge ' + (on ? 'ok' : '');
           continue;
@@ -230,33 +238,31 @@
       }
       for (const node of root.querySelectorAll('[data-hero]')) {
         const [dev, fid] = node.dataset.hero.split(':');
-        const dp = fid === 'batt_v' ? 1 : 1;
-        setText(node, App.fmt(App.val(dev, fid), dp) + ' V');
+        setText(node, App.online(dev) ? App.fmt(App.val(dev, fid), 1) + ' V' : '--');
       }
       for (const node of root.querySelectorAll('[data-power]')) {
         const dev = node.dataset.power;
-        const v = App.val(dev, 'pv_p');
-        const p = dev === 'dcdc' ? App.val('dcdc', 'out_p') : v;
-        setText(node, App.fmt(p, 0) + 'W');
+        const p = dev === 'dcdc' ? App.val('dcdc', 'out_p') : App.val(dev, 'pv_p');
+        setText(node, App.online(dev) ? App.fmt(p, 0) + 'W' : '--');
       }
     }
 
     function updateStrip() {
       const st = App.state.status || {};
       const fc = App.dev('fc');
+      const fcOn = App.online('fc');
       root.querySelector('#spLink').innerHTML = '链路 <b>' + (st.linkOnline ? '正常' : '断线') + '</b>';
-      root.querySelector('#spMode').innerHTML = '模式 <b>' + App.esc(App.online('fc') ? (App.dev('fc').mode || '—') : '—') + '</b>';
-      root.querySelector('#spArmed').innerHTML = '解锁 <b>' + (App.online('fc') && (fc.armed === true || fc.armed === 1) ? '是' : '否') + '</b>';
-      root.querySelector('#spAlt').innerHTML = '高度 <b>' + App.fmt(App.val('fc', 'alt'), 0) + ' m</b>';
+      root.querySelector('#spMode').innerHTML = '模式 <b>' + App.esc(fcOn ? (fc.mode || '—') : '—') + '</b>';
+      root.querySelector('#spArmed').innerHTML = '解锁 <b>' + (fcOn && (fc.armed === true || fc.armed === 1) ? '是' : '否') + '</b>';
+      root.querySelector('#spAlt').innerHTML = '高度 <b>' + (fcOn ? App.fmt(App.val('fc', 'alt'), 0) + ' m' : '--') + '</b>';
       const vx = App.val('fc', 'vx'), vy = App.val('fc', 'vy');
       const spd = Number.isFinite(vx) && Number.isFinite(vy) ? Math.sqrt(vx * vx + vy * vy) : NaN;
-      root.querySelector('#spSpd').innerHTML = '速度 <b>' + App.fmt(spd, 1) + ' m/s</b>';
+      root.querySelector('#spSpd').innerHTML = '速度 <b>' + (fcOn ? App.fmt(spd, 1) + ' m/s' : '--') + '</b>';
       root.querySelector('#spAirbag').innerHTML = '空气囊气压 <b>' + airbagText() + '</b>';
       const tn = App.tempNodes(), pn = App.pressureNodes();
-      const nodeOn = (n) => n && n.online !== 0 && n.online !== false;
       const linkUp = !(App.state.status && App.state.status.linkOnline === false);
       const total = tn.length + pn.length;
-      const on = linkUp ? tn.filter(nodeOn).length + pn.filter(nodeOn).length : 0;
+      const on = linkUp ? tn.filter(App.nodeOnline).length + pn.filter(App.nodeOnline).length : 0;
       root.querySelector('#spNodes').innerHTML = '采集节点 <b>' + (total ? on + ' / ' + total : '--') + '</b>';
 
       const level = App.CheckEngine ? App.CheckEngine.readyLevel() : 0;
@@ -266,25 +272,27 @@
     }
 
     function updateBms() {
+      const bmsOn = App.online('bms');
+      const bkOn = App.online('backup');
+      const dcdcOn = App.online('dcdc');
       const soc = App.val('bms', 'soc');
-      if (socCanvas) App.drawSocRing(socCanvas, App.online('bms') ? soc : NaN);
-      setText(root.querySelector('#bmsSoc'), (App.online('bms') ? App.fmtInt(soc) : '--') + '%');
-      setText(root.querySelector('#bmsPackV'), App.fmt(App.val('bms', 'pack_v'), 1) + ' V');
-      setText(root.querySelector('#bmsPackI'), App.fmt(App.val('bms', 'pack_i'), 1) + ' A');
-      setText(root.querySelector('#bkPackV'), App.fmt(App.val('backup', 'pack_v'), 1) + ' V');
-      setText(root.querySelector('#bkSoc'), (App.online('backup') ? App.fmtInt(App.val('backup', 'soc')) : '--') + '%');
-      setText(root.querySelector('#dcdcOutV'), App.fmt(App.val('dcdc', 'out_v'), 1) + ' V');
+      if (socCanvas) App.drawSocRing(socCanvas, bmsOn ? soc : NaN);
+      setText(root.querySelector('#bmsSoc'), (bmsOn ? App.fmtInt(soc) : '--') + '%');
+      setText(root.querySelector('#bmsPackV'), bmsOn ? App.fmt(App.val('bms', 'pack_v'), 1) + ' V' : '--');
+      setText(root.querySelector('#bmsPackI'), bmsOn ? App.fmt(App.val('bms', 'pack_i'), 1) + ' A' : '--');
+      setText(root.querySelector('#bkPackV'), bkOn ? App.fmt(App.val('backup', 'pack_v'), 1) + ' V' : '--');
+      setText(root.querySelector('#bkSoc'), (bkOn ? App.fmtInt(App.val('backup', 'soc')) : '--') + '%');
+      setText(root.querySelector('#dcdcOutV'), dcdcOn ? App.fmt(App.val('dcdc', 'out_v'), 1) + ' V' : '--');
     }
 
     function updateNodes(force) {
       const tempNodes = App.tempNodes();
       const presNodes = App.pressureNodes();
-      const nodeOn = (n) => n && n.online !== 0 && n.online !== false;
       const linkUp = !(App.state.status && App.state.status.linkOnline === false);
       const tempCount = root.querySelector('#tempCount');
       const presCount = root.querySelector('#presCount');
-      if (tempCount) tempCount.textContent = '在线 ' + (linkUp ? tempNodes.filter(nodeOn).length : 0) + ' / ' + tempNodes.length;
-      if (presCount) presCount.textContent = '在线 ' + (linkUp ? presNodes.filter(nodeOn).length : 0) + ' / ' + presNodes.length;
+      if (tempCount) tempCount.textContent = '在线 ' + (linkUp ? tempNodes.filter(App.nodeOnline).length : 0) + ' / ' + tempNodes.length;
+      if (presCount) presCount.textContent = '在线 ' + (linkUp ? presNodes.filter(App.nodeOnline).length : 0) + ' / ' + presNodes.length;
       const tempSig = JSON.stringify(tempNodes);
       if (force || tempSig !== lastTempSig) {
         lastTempSig = tempSig;

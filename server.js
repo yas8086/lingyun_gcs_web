@@ -91,6 +91,8 @@ function setupMqtt(config) {
     mqtt = null;
   }
   mqttState = 'connecting';
+  // 运行时切换数据源时必须停掉模拟源，避免模拟帧与真实遥测混流
+  telemetry.stopSimulator();
   telemetry.setSource('mqtt');
   telemetry.setMqttConnected(false);
   mqtt = new MqttClient({
@@ -326,7 +328,14 @@ const MIME = {
 };
 
 function serveStatic(req, res, pathname) {
-  let rel = decodeURIComponent(pathname);
+  let rel;
+  try {
+    rel = decodeURIComponent(pathname);
+  } catch (e) {
+    res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Bad Request');
+    return;
+  }
   if (rel === '/' || rel === '') rel = '/index.html';
   const file = path.join(PUBLIC_DIR, path.normalize(rel).replace(/^(\.\.[/\\])+/, ''));
   if (!file.startsWith(PUBLIC_DIR)) {
@@ -348,7 +357,9 @@ function serveStatic(req, res, pathname) {
     };
     res.writeHead(200, headers);
     if (req.method === 'HEAD') { res.end(); return; }
-    fs.createReadStream(file).pipe(res);
+    const stream = fs.createReadStream(file);
+    stream.on('error', () => { try { res.destroy(); } catch (e) { /* ignore */ } });
+    stream.pipe(res);
   });
 }
 

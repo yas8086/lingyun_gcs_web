@@ -48,6 +48,8 @@
   let modal = null;
   let audit = [];
   let powerResultHandler = null;
+  let pendingReqId = null;
+  let pendingItemId = null;
 
   function powerOnAllowed() {
     const st = App.state.status || {};
@@ -60,6 +62,8 @@
 
   function open() {
     if (modal) { modal.close(); modal = null; }
+    pendingReqId = null;
+    pendingItemId = null;
     let selected = null;
     let checked = false;
     let textOk = '';
@@ -251,6 +255,8 @@
         return;
       }
       const sc = selectedCommand();
+      pendingReqId = null;
+      pendingItemId = null;
       busy = true;
       result = '正在下发 ' + sc.cmd + ' …';
       resultType = '';
@@ -264,6 +270,8 @@
           resultType = 'err';
           App.toast('电源指令未发出：' + (data.message || '通道不可用'), 'err');
         } else {
+          pendingReqId = data.req_id;
+          pendingItemId = it.id;
           result = '已下发 ' + sc.cmd + '（req_id=' + data.req_id + '），等待机载 ACK…';
           resultType = '';
           audit.unshift(App.fmtClock() + '  ' + sc.cmd + '  req_id=' + data.req_id + '  已下发');
@@ -314,7 +322,13 @@
       if (!r.cmd) return;
       const it = currentItem();
       const myCmd = it ? (it.cmd || (it.kind === 'alloff' ? 'power_all_off' : it.kind === 'dcdc' ? 'dcdc_set_output' : it.kind === 'mppt' ? 'mppt_write' : '')) : '';
-      if (myCmd && r.cmd !== myCmd) return;
+      // req_id 唯一标识一次下发，配合指令项 id 避免切换选择后误配结果
+      const isMine = pendingReqId !== null
+        ? (r.req_id === pendingReqId && !!it && it.id === pendingItemId)
+        : (!!myCmd && r.cmd === myCmd);
+      if (!isMine) return;
+      pendingReqId = null;
+      pendingItemId = null;
       busy = false;
       result = (r.accepted ? '指令已接受：' : (r.timeout ? '指令无应答：' : '指令被拒绝：')) + r.cmd
         + (r.message ? '\n' + r.message : '')
